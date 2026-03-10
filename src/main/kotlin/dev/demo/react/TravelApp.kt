@@ -15,7 +15,11 @@ import com.williamcallahan.tui4j.compat.lipgloss.color.Color
 // Custom message for agent response
 data class AgentResponseMessage(val answer: String) : Message
 
-class TravelApp(private val assistant: TravelAssistant) : Model {
+class TravelApp(
+    private val assistant: TravelAssistant,
+    private val modelName: String = "",
+    private val langchain4jVersion: String = "",
+) : Model {
 
     private var terminalWidth = 80
     private var terminalHeight = 24
@@ -161,7 +165,10 @@ class TravelApp(private val assistant: TravelAssistant) : Model {
         // Title bar
         val titleText = if (showLogs) "Smart Trip Planner — Logs" else "Smart Trip Planner"
         val title = titleStyle.width(contentWidth).render(titleText)
-        val subtitle = subtitleStyle.width(contentWidth).render("ReACT + LangChain4j Demo")
+        val bannerParts = mutableListOf("ReACT + LangChain4j Demo")
+        if (modelName.isNotEmpty()) bannerParts.add(modelName)
+        if (langchain4jVersion.isNotEmpty()) bannerParts.add("LC4j $langchain4jVersion")
+        val subtitle = subtitleStyle.width(contentWidth).render(bannerParts.joinToString("  ·  "))
         val separator = dimStyle.render("─".repeat(contentWidth))
         val titleBlock = Join.joinVertical(Position.Left, title, subtitle, separator)
 

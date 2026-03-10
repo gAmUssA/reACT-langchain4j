@@ -20,9 +20,15 @@ fun main() {
         exitProcess(1)
     }
 
+    val modelName = "claude-sonnet-4-20250514"
+    val langchain4jVersion = Thread.currentThread().contextClassLoader
+        ?.getResourceAsStream("META-INF/maven/dev.langchain4j/langchain4j/pom.properties")
+        ?.use { java.util.Properties().apply { load(it) }.getProperty("version") }
+        ?: "unknown"
+
     val chatModel = AnthropicChatModel.builder()
         .apiKey(apiKey)
-        .modelName("claude-sonnet-4-20250514")
+        .modelName(modelName)
         .logRequests(true)
         .logResponses(true)
         .build()
@@ -33,6 +39,6 @@ fun main() {
         .chatMemory(MessageWindowChatMemory.withMaxMessages(20))
         .build()
 
-    val app = TravelApp(assistant)
+    val app = TravelApp(assistant, modelName = modelName, langchain4jVersion = langchain4jVersion)
     Program(app).withAltScreen().run()
 }
