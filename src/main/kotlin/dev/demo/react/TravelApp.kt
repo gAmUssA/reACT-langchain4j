@@ -1,11 +1,11 @@
 package dev.demo.react
 
-import com.williamcallahan.tui4j.compat.bubbletea.*
-import com.williamcallahan.tui4j.compat.bubbletea.message.WindowSizeMessage
 import com.williamcallahan.tui4j.compat.bubbles.spinner.Spinner
 import com.williamcallahan.tui4j.compat.bubbles.spinner.SpinnerType
 import com.williamcallahan.tui4j.compat.bubbles.textinput.TextInput
 import com.williamcallahan.tui4j.compat.bubbles.viewport.Viewport
+import com.williamcallahan.tui4j.compat.bubbletea.*
+import com.williamcallahan.tui4j.compat.bubbletea.message.WindowSizeMessage
 import com.williamcallahan.tui4j.compat.lipgloss.Borders
 import com.williamcallahan.tui4j.compat.lipgloss.Join
 import com.williamcallahan.tui4j.compat.lipgloss.Position
@@ -27,10 +27,13 @@ class TravelApp(private val assistant: TravelAssistant) : Model {
     }
 
     private var spinner = Spinner(SpinnerType.DOT)
-    private var viewport = Viewport.create(76, 16)
+    private var chatViewport = Viewport.create(76, 16)
+    private var logViewport = Viewport.create(76, 16)
 
     private val messages = mutableListOf<ChatEntry>()
     private var isLoading = false
+    private var showLogs = false
+    private var lastLogLineCount = 0
 
     // Styles
     private val titleStyle = Style.newStyle()
@@ -51,6 +54,8 @@ class TravelApp(private val assistant: TravelAssistant) : Model {
     private val blockquoteStyle = Style.newStyle().foreground(Color.color("245")).italic(true)
     private val codeStyle = Style.newStyle().foreground(Color.color("222"))
     private val hrColor = Color.color("240")
+    private val logTitleStyle = Style.newStyle().foreground(Color.color("214")).bold(true).align(Position.Center)
+    private val logDimStyle = Style.newStyle().foreground(Color.color("243"))
 
     override fun init(): Command {
         return Command.batch(
@@ -60,16 +65,18 @@ class TravelApp(private val assistant: TravelAssistant) : Model {
         )
     }
 
+    /** The currently active viewport (chat or logs). */
+    private val activeViewport: Viewport
+        get() = if (showLogs) logViewport else chatViewport
+
     override fun update(msg: Message): UpdateResult<out Model> {
         when (msg) {
             is WindowSizeMessage -> {
                 terminalWidth = msg.width()
                 terminalHeight = msg.height()
-                val contentWidth = terminalWidth - 4
-                input.setWidth(contentWidth - 4)
-                viewport.setWidth(terminalWidth - 2)
-                viewport.setHeight(terminalHeight - 8)
+                resizeComponents()
                 rebuildViewportContent()
+                refreshLogViewport()
                 return UpdateResult.from(this)
             }
 
@@ -78,14 +85,26 @@ class TravelApp(private val assistant: TravelAssistant) : Model {
                 messages.add(ChatEntry(Role.ASSISTANT, msg.answer))
                 input.focus()
                 rebuildViewportContent()
-                viewport.gotoBottom()
+                chatViewport.gotoBottom()
                 return UpdateResult.from(this)
             }
 
             is KeyPressMessage -> {
                 when (msg.key()) {
                     "ctrl+c" -> return UpdateResult.from(this, Command.quit())
+
+                    // Toggle log panel with Ctrl+O
+                    "ctrl+o" -> {
+                        showLogs = !showLogs
+                        if (showLogs) {
+                            refreshLogViewport()
+                            logViewport.gotoBottom()
+                        }
+                        return UpdateResult.from(this)
+                    }
+
                     "enter" -> {
+                        if (showLogs) return UpdateResult.from(this) // no input in log view
                         val query = input.value().trim()
                         if (query.isEmpty() || isLoading) return UpdateResult.from(this)
 
@@ -98,7 +117,7 @@ class TravelApp(private val assistant: TravelAssistant) : Model {
                         isLoading = true
                         input.blur()
                         rebuildViewportContent()
-                        viewport.gotoBottom()
+                        chatViewport.gotoBottom()
 
                         val agentCommand = Command {
                             val answer = assistant.chat(query)
@@ -109,29 +128,30 @@ class TravelApp(private val assistant: TravelAssistant) : Model {
                     }
                 }
 
-                // Scroll keys when not typing
-                if (isLoading || !input.isFocused) {
+                // Scroll keys — always work in log view, or in chat when not typing
+                if (showLogs || isLoading || !input.isFocused) {
                     when (msg.key()) {
-                        "up", "k" -> { viewport.scrollUp(1); return UpdateResult.from(this) }
-                        "down", "j" -> { viewport.scrollDown(1); return UpdateResult.from(this) }
-                        "pgup" -> { viewport.pageUp(); return UpdateResult.from(this) }
-                        "pgdown" -> { viewport.pageDown(); return UpdateResult.from(this) }
+                        "up", "k" -> { activeViewport.scrollUp(1); return UpdateResult.from(this) }
+                        "down", "j" -> { activeViewport.scrollDown(1); return UpdateResult.from(this) }
+                        "pgup" -> { activeViewport.pageUp(); return UpdateResult.from(this) }
+                        "pgdown" -> { activeViewport.pageDown(); return UpdateResult.from(this) }
                     }
                 }
             }
         }
 
-        // Update spinner while loading
+        // Update spinner while loading — also refresh log viewport to show new logs
         if (isLoading) {
+            refreshLogViewportIfChanged()
             val spinnerResult = spinner.update(msg)
             spinner = spinnerResult.model()
             return UpdateResult.from(this, spinnerResult.command())
         }
 
-        // Forward to viewport for mouse wheel / built-in keys
-        viewport.update(msg)
-        // Update text input
-        input.update(msg)
+        // Forward to active viewport for mouse wheel / built-in keys
+        activeViewport.update(msg)
+        // Update text input (only matters in chat view)
+        if (!showLogs) input.update(msg)
         return UpdateResult.from(this)
     }
 
@@ -139,17 +159,27 @@ class TravelApp(private val assistant: TravelAssistant) : Model {
         val contentWidth = terminalWidth - 2
 
         // Title bar
-        val title = titleStyle.width(contentWidth).render("Smart Trip Planner")
+        val titleText = if (showLogs) "Smart Trip Planner — Logs" else "Smart Trip Planner"
+        val title = titleStyle.width(contentWidth).render(titleText)
         val subtitle = subtitleStyle.width(contentWidth).render("ReACT + LangChain4j Demo")
         val separator = dimStyle.render("─".repeat(contentWidth))
         val titleBlock = Join.joinVertical(Position.Left, title, subtitle, separator)
 
-        // Viewport (scrollable chat)
-        val vpView = viewport.view()
+        // Active viewport
+        val vpView = activeViewport.view()
 
-        // Input area
+        // Input area / log mode indicator
         val inputArea: String
-        if (isLoading) {
+        if (showLogs) {
+            val logCount = LogCapture.lineCount()
+            val logInfo = logDimStyle.render("  $logCount log lines captured")
+            inputArea = Style.newStyle()
+                .border(Borders.roundedBorder())
+                .borderForeground(Color.color("214"))
+                .width(contentWidth - 2)
+                .padding(0, 1)
+                .render(logInfo)
+        } else if (isLoading) {
             val loadingText = "  ${spinner.view()} ${toolStyle.render("Thinking... (using tools to plan your trip)")}"
             inputArea = Style.newStyle()
                 .border(Borders.roundedBorder())
@@ -167,13 +197,25 @@ class TravelApp(private val assistant: TravelAssistant) : Model {
         }
 
         // Status bar
-        val scrollInfo = if (viewport.totalLineCount() > viewport.visibleLineCount()) {
-            val pct = (viewport.scrollPercent() * 100).toInt()
-            " │ ${pct}% scrolled"
+        val vp = activeViewport
+        val scrollInfo = if (vp.totalLineCount() > vp.visibleLineCount()) {
+            val pct = (vp.scrollPercent() * 100).toInt()
+            " │ ${pct}%"
         } else ""
-        val statusBar = dimStyle.render("  ↑↓ scroll │ enter send │ ctrl+c quit$scrollInfo")
+        val logToggle = if (showLogs) "ctrl+o chat" else "ctrl+o logs"
+        val statusBar = dimStyle.render("  ↑↓ scroll │ $logToggle │ enter send │ ctrl+c quit$scrollInfo")
 
         return Join.joinVertical(Position.Left, titleBlock, vpView, inputArea, statusBar)
+    }
+
+    private fun resizeComponents() {
+        val contentWidth = terminalWidth - 4
+        val vpHeight = terminalHeight - 8
+        input.setWidth(contentWidth - 4)
+        chatViewport.setWidth(terminalWidth - 2)
+        chatViewport.setHeight(vpHeight)
+        logViewport.setWidth(terminalWidth - 2)
+        logViewport.setHeight(vpHeight)
     }
 
     private fun rebuildViewportContent() {
@@ -201,7 +243,27 @@ class TravelApp(private val assistant: TravelAssistant) : Model {
             parts.add("")
         }
 
-        viewport.setContent(parts.joinToString("\n\n"))
+        chatViewport.setContent(parts.joinToString("\n\n"))
+    }
+
+    /** Refresh the log viewport content from the capture buffer. */
+    private fun refreshLogViewport() {
+        lastLogLineCount = LogCapture.lineCount()
+        val content = LogCapture.content()
+        if (content.isBlank()) {
+            logViewport.setContent(logDimStyle.render("  No logs captured yet. Logs appear when the LLM is called."))
+        } else {
+            logViewport.setContent(content)
+        }
+    }
+
+    /** Only refresh log viewport if new lines have been captured (avoids flicker). */
+    private fun refreshLogViewportIfChanged() {
+        val current = LogCapture.lineCount()
+        if (current != lastLogLineCount) {
+            refreshLogViewport()
+            if (showLogs) logViewport.gotoBottom()
+        }
     }
 
     private fun renderUserMessage(content: String, width: Int): String {

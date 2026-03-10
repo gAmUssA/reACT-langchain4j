@@ -143,6 +143,7 @@ Other TUI features:
 - User messages in cyan-bordered boxes, assistant in white-bordered boxes
 - Animated spinner during LLM thinking
 - Scroll percentage indicator in status bar
+- **Log panel** (`Ctrl+O`) — toggle between chat and raw LLM request/response logs, similar to Claude Code's output toggle
 
 ## Getting Started
 
@@ -179,6 +180,7 @@ Compare London and Bangkok for a week-long trip
 - `Enter` — send message
 - `↑↓` — scroll chat history
 - `PgUp/PgDn` — scroll by page
+- `Ctrl+O` — toggle log panel (view raw LLM requests/responses)
 - `Ctrl+C` — quit
 
 ## Project Structure

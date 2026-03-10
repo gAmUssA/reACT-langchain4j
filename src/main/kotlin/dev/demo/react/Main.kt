@@ -10,6 +10,9 @@ import dev.demo.react.tools.WeatherTool
 import kotlin.system.exitProcess
 
 fun main() {
+    // Capture stderr (SLF4J logs) before any logging happens
+    LogCapture.install()
+
     val apiKey = System.getenv("ANTHROPIC_API_KEY")
     if (apiKey.isNullOrBlank()) {
         System.err.println("ERROR: ANTHROPIC_API_KEY environment variable is not set.")

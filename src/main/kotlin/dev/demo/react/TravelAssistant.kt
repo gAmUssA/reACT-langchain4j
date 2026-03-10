@@ -4,7 +4,8 @@ import dev.langchain4j.service.SystemMessage
 
 interface TravelAssistant {
 
-    @SystemMessage("""
+    @SystemMessage(
+        """
         You are a smart travel planning assistant. When a user asks about a trip,
         you MUST use your tools step by step to gather information before answering:
 
@@ -15,6 +16,7 @@ interface TravelAssistant {
         Always use ALL available tools to provide the most helpful answer.
         After gathering information from tools, compile a clear, well-structured itinerary.
         Be enthusiastic and helpful!
-    """)
+    """
+    )
     fun chat(userMessage: String): String
 }
