@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.env
+
+# Tessl
+.tessl/
+tessl.json
+
+# Claude
+.claude/
+
+# Cursor
+.cursor/
+
+# MCP config
+.mcp.json
