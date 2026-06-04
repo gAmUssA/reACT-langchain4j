@@ -11,8 +11,8 @@ repositories {
 }
 
 dependencies {
-    implementation("dev.langchain4j:langchain4j:1.12.2")
-    implementation("dev.langchain4j:langchain4j-anthropic:1.12.2")
+    implementation("dev.langchain4j:langchain4j:1.15.1")
+    implementation("dev.langchain4j:langchain4j-anthropic:1.15.1")
     implementation("com.williamcallahan:tui4j:0.3.3")
     implementation("org.slf4j:slf4j-simple:2.0.16")
 }
